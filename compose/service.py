@@ -1222,6 +1222,13 @@ class Service(object):
         if 'image' not in self.options or 'build' not in self.options:
             return
 
+        if self.options['private']:
+            hostname, _ = parse_repository_hostname(self.options['image'])
+            if hostname == '':
+                raise OperationFailedError(
+                    'Image is marked as private, not allowed to be pushed to Docker Hub'
+                )
+
         repo, tag, separator = parse_repository_tag(self.options['image'])
         tag = tag or 'latest'
         log.info('Pushing %s (%s%s%s)...' % (self.name, repo, separator, tag))
@@ -1394,6 +1401,33 @@ def build_container_name(project, service, number, slug=None):
 
 
 # Images
+
+def parse_repository_hostname(repo_path):
+    """Splits image identification into hostname and path.
+
+    Example:
+    >>> parse_repository_hostname('user/repo@sha256:digest')
+    ('', 'user/repo@sha256:digest')
+    >>> parse_repository_hostname('user/repo:v1')
+    ('', 'user/repo:v1')
+    >>> parse_repository_hostname('localhost/user/repo:v1')
+    ('localhost', 'user/repo:v1')
+    >>> parse_repository_hostname('server.com/user/repo:v1')
+    ('server.com', 'user/repo:v1')
+    >>> parse_repository_hostname('server:8080/user/repo:v1')
+    ('server:8080', 'user/repo:v1')
+    >>> parse_repository_hostname('server.com:8080/user/repo:v1')
+    ('server.com:8080', 'user/repo:v1')
+    """
+    path_separator = "/"
+
+    if path_separator in repo_path:
+        hostname, path = repo_path.split(path_separator, 1)
+        if "." in hostname or ":" in hostname or hostname == "localhost":
+            return hostname, path
+
+    return "", repo_path
+
 
 def parse_repository_tag(repo_path):
     """Splits image identification into base image path, tag/digest
